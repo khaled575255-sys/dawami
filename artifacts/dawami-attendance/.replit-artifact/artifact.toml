@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "دوامي | إدارة الحضور"
+description = "تطبيق عربي لإدارة العمال والحضور والانصراف بتقنية NFC، مع تقارير دقيقة وحسابات مستقلة لكل شركة."
+version = "1.0.0"
+id = "artifacts/dawami-attendance"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21105
+
+[services.development]
+run = "pnpm --filter @workspace/dawami-attendance run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/dawami-attendance", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/dawami-attendance/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21105"
+BASE_PATH = "/"

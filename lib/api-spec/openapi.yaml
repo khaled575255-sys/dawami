@@ -10,6 +10,14 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: company
+    description: Company workspace setup
+  - name: employees
+    description: Employee management
+  - name: attendance
+    description: NFC attendance and reports
+  - name: dashboard
+    description: Dashboard summaries
 paths:
   /healthz:
     get:
@@ -24,6 +32,214 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /company:
+    get:
+      operationId: getCompany
+      tags: [company]
+      summary: Get the current user's company
+      responses:
+        "200":
+          description: Company workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "404":
+          description: No company has been created yet
+    post:
+      operationId: createCompany
+      tags: [company]
+      summary: Create the current user's company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyInput"
+      responses:
+        "201":
+          description: Company created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "409":
+          description: Company already exists
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get today's and this month's attendance totals
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /employees:
+    get:
+      operationId: listEmployees
+      tags: [employees]
+      summary: List employees in the current company
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employee"
+    post:
+      operationId: createEmployee
+      tags: [employees]
+      summary: Add an employee to the current company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeInput"
+      responses:
+        "201":
+          description: Employee created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+  /employees/{employeeId}:
+    parameters:
+      - in: path
+        name: employeeId
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateEmployee
+      tags: [employees]
+      summary: Update an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeUpdate"
+      responses:
+        "200":
+          description: Employee updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "404":
+          description: Employee not found
+    delete:
+      operationId: deleteEmployee
+      tags: [employees]
+      summary: Deactivate an employee without removing their records
+      responses:
+        "204":
+          description: Employee deactivated
+        "404":
+          description: Employee not found
+  /employees/{employeeId}/nfc-token:
+    parameters:
+      - in: path
+        name: employeeId
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: createEmployeeNfcToken
+      tags: [employees]
+      summary: Generate a one-time token to write to an NFC tag
+      responses:
+        "201":
+          description: New NFC tag token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NfcTokenResult"
+        "404":
+          description: Employee not found
+  /attendance/tap:
+    post:
+      operationId: tapNfcAttendance
+      tags: [attendance]
+      summary: Record check-in or check-out from an NFC tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceTapInput"
+      responses:
+        "200":
+          description: Attendance recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceTapResult"
+        "404":
+          description: NFC tag is not linked to an active employee
+        "409":
+          description: Attendance is already complete for today
+  /attendance:
+    get:
+      operationId: listAttendance
+      tags: [attendance]
+      summary: List attendance records for a date range
+      parameters:
+        - in: query
+          name: from
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+        - in: query
+          name: to
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+        - in: query
+          name: employeeId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Attendance records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceRecord"
+  /reports/monthly:
+    get:
+      operationId: getMonthlyReport
+      tags: [attendance]
+      summary: Get monthly work hours and lateness report
+      parameters:
+        - in: query
+          name: month
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+      responses:
+        "200":
+          description: Monthly attendance report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyReport"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +249,152 @@ components:
           type: string
       required:
         - status
+    Company:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        timeZone: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, timeZone, createdAt]
+    CompanyInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        timeZone: { type: string, default: Asia/Riyadh }
+      required: [name]
+    Employee:
+      type: object
+      properties:
+        id: { type: integer }
+        fullName: { type: string }
+        phone: { type: ["string", "null"] }
+        position: { type: ["string", "null"] }
+        shiftStartTime: { type: string }
+        gracePeriodMinutes: { type: integer }
+        isActive: { type: boolean }
+        hasNfcCard: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required:
+        - id
+        - fullName
+        - phone
+        - position
+        - shiftStartTime
+        - gracePeriodMinutes
+        - isActive
+        - hasNfcCard
+        - createdAt
+    EmployeeInput:
+      type: object
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 160 }
+        phone: { type: ["string", "null"], maxLength: 40 }
+        position: { type: ["string", "null"], maxLength: 100 }
+        shiftStartTime: { type: string, pattern: '^\d{2}:\d{2}$', default: "08:00" }
+        gracePeriodMinutes: { type: integer, minimum: 0, maximum: 120, default: 10 }
+      required: [fullName]
+    EmployeeUpdate:
+      type: object
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 160 }
+        phone: { type: ["string", "null"], maxLength: 40 }
+        position: { type: ["string", "null"], maxLength: 100 }
+        shiftStartTime: { type: string, pattern: '^\d{2}:\d{2}$' }
+        gracePeriodMinutes: { type: integer, minimum: 0, maximum: 120 }
+        isActive: { type: boolean }
+    NfcTokenResult:
+      type: object
+      properties:
+        token: { type: string }
+        message: { type: string }
+      required: [token, message]
+    AttendanceTapInput:
+      type: object
+      properties:
+        token: { type: string, minLength: 24, maxLength: 256 }
+      required: [token]
+    AttendanceTapResult:
+      type: object
+      properties:
+        employeeName: { type: string }
+        action: { type: string, enum: [check-in, check-out] }
+        timestamp: { type: string, format: date-time }
+        workMinutes: { type: ["integer", "null"] }
+        lateMinutes: { type: integer }
+      required: [employeeName, action, timestamp, workMinutes, lateMinutes]
+    AttendanceRecord:
+      type: object
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        attendanceDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        checkInAt: { type: ["string", "null"], format: date-time }
+        checkOutAt: { type: ["string", "null"], format: date-time }
+        workMinutes: { type: integer }
+        lateMinutes: { type: integer }
+        status: { type: string, enum: [present, late, in-progress] }
+      required:
+        - id
+        - employeeId
+        - employeeName
+        - attendanceDate
+        - checkInAt
+        - checkOutAt
+        - workMinutes
+        - lateMinutes
+        - status
+    EmployeeMonthSummary:
+      type: object
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        presentDays: { type: integer }
+        lateDays: { type: integer }
+        workMinutes: { type: integer }
+        lateMinutes: { type: integer }
+      required: [employeeId, employeeName, presentDays, lateDays, workMinutes, lateMinutes]
+    MonthlyReport:
+      type: object
+      properties:
+        month: { type: string }
+        totalWorkMinutes: { type: integer }
+        totalLateMinutes: { type: integer }
+        presentDays: { type: integer }
+        lateDays: { type: integer }
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttendanceRecord"
+        employees:
+          type: array
+          items:
+            $ref: "#/components/schemas/EmployeeMonthSummary"
+      required: [month, totalWorkMinutes, totalLateMinutes, presentDays, lateDays, records, employees]
+    DashboardSummary:
+      type: object
+      properties:
+        companyName: { type: string }
+        today: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        totalEmployees: { type: integer }
+        presentToday: { type: integer }
+        lateToday: { type: integer }
+        absentToday: { type: integer }
+        hoursThisMonth: { type: number }
+        lateMinutesThisMonth: { type: integer }
+        recentAttendance:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttendanceRecord"
+      required:
+        - companyName
+        - today
+        - totalEmployees
+        - presentToday
+        - lateToday
+        - absentToday
+        - hoursThisMonth
+        - lateMinutesThisMonth
+        - recentAttendance
 
