@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, ilike, or } from "drizzle-orm";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import {
   CreateEmployeeBody,
   CreateEmployeeNfcTokenParams,
@@ -17,8 +17,6 @@ import { db, employeesTable } from "@workspace/db";
 import { getClerkUserId, requireAuth } from "../middlewares/require-auth";
 import { findCompanyForUser } from "../lib/tenant";
 
-const router: IRouter = Router();
-
 function validClock(value: string): boolean {
   const match = /^(\d{2}):(\d{2})$/.exec(value);
   if (!match) return false;
@@ -32,7 +30,20 @@ async function companyIdForUser(userId: string): Promise<number | null> {
   return company?.id ?? null;
 }
 
-router.get("/employees", requireAuth, async (req, res): Promise<void> => {
+function serializeEmployee(employee: typeof employeesTable.$inferSelect) {
+  const { nfcTokenHash, ...publicEmployee } = employee;
+  return {
+    ...publicEmployee,
+    hasNfcCard: nfcTokenHash !== null,
+  };
+}
+
+export function createEmployeesRouter(
+  authenticate: RequestHandler = requireAuth,
+): IRouter {
+  const router: IRouter = Router();
+
+  router.get("/employees", authenticate, async (req, res): Promise<void> => {
   const params = ListEmployeesQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -62,10 +73,10 @@ router.get("/employees", requireAuth, async (req, res): Promise<void> => {
     .from(employeesTable)
     .where(and(...conditions))
     .orderBy(employeesTable.fullName);
-  res.json(ListEmployeesResponse.parse(employees));
+  res.json(ListEmployeesResponse.parse(employees.map(serializeEmployee)));
 });
 
-router.post("/employees", requireAuth, async (req, res): Promise<void> => {
+  router.post("/employees", authenticate, async (req, res): Promise<void> => {
   const parsed = CreateEmployeeBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -91,12 +102,12 @@ router.post("/employees", requireAuth, async (req, res): Promise<void> => {
       position: parsed.data.position ?? null,
     })
     .returning();
-  res.status(201).json(CreateEmployeeResponse.parse(employee));
+  res.status(201).json(CreateEmployeeResponse.parse(serializeEmployee(employee)));
 });
 
 router.patch(
   "/employees/:employeeId",
-  requireAuth,
+  authenticate,
   async (req, res): Promise<void> => {
     const params = UpdateEmployeeParams.safeParse(req.params);
     const parsed = UpdateEmployeeBody.safeParse(req.body);
@@ -140,13 +151,13 @@ router.patch(
       res.status(404).json({ error: "العامل غير موجود" });
       return;
     }
-    res.json(UpdateEmployeeResponse.parse(employee));
+    res.json(UpdateEmployeeResponse.parse(serializeEmployee(employee)));
   },
 );
 
 router.delete(
   "/employees/:employeeId",
-  requireAuth,
+  authenticate,
   async (req, res): Promise<void> => {
     const params = DeleteEmployeeParams.safeParse(req.params);
     if (!params.success) {
@@ -179,7 +190,7 @@ router.delete(
 
 router.post(
   "/employees/:employeeId/nfc-token",
-  requireAuth,
+  authenticate,
   async (req, res): Promise<void> => {
     const params = CreateEmployeeNfcTokenParams.safeParse(req.params);
     if (!params.success) {
@@ -220,4 +231,8 @@ router.post(
   },
 );
 
+  return router;
+}
+
+const router = createEmployeesRouter();
 export default router;

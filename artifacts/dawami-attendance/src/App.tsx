@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ClerkProvider, Show, SignIn, SignUp, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
@@ -18,6 +18,9 @@ import {
 } from '@workspace/api-client-react';
 import type { Employee, EmployeeInput, EmployeeUpdate } from '@workspace/api-client-react';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
+import { Button } from './components/button';
+import { EmployeeDialog } from './components/employee-dialog';
+import { Modal } from './components/modal';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -86,10 +89,6 @@ function Logo({ inverted = false }: { inverted?: boolean }) {
     <span className="brand-mark" aria-hidden="true"><span /><span /><span /></span>
     <span className="brand-word">دوامي</span>
   </Link>;
-}
-
-function Button({ children, className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button {...props} className={`button ${className}`} />;
 }
 
 function Skeleton({ className = '' }: { className?: string }) {
@@ -414,47 +413,12 @@ function Employees() {
   </section>;
 }
 
-function EmployeeDialog({ employee, busy, error, close, save }: { employee: Employee | null; busy: boolean; error: string; close: () => void; save: (data: EmployeeInput | EmployeeUpdate) => void }) {
-  const [fullName, setFullName] = useState(employee?.fullName || '');
-  const [phone, setPhone] = useState(employee?.phone || '');
-  const [position, setPosition] = useState(employee?.position || '');
-  const [shiftStartTime, setShiftStartTime] = useState(employee?.shiftStartTime || '09:00');
-  const [gracePeriodMinutes, setGracePeriodMinutes] = useState(employee?.gracePeriodMinutes ?? 10);
-  const onSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    save({ fullName: fullName.trim(), phone: phone.trim() || null, position: position.trim() || null, shiftStartTime, gracePeriodMinutes });
-  };
-  return <Modal title={employee ? 'تعديل بيانات العامل' : 'إضافة عامل جديد'} close={close} testId="dialog-employee">
-    <form className="dialog-form" onSubmit={onSubmit}>
-      <label>الاسم الكامل<input required minLength={2} maxLength={160} value={fullName} onChange={e => setFullName(e.target.value)} placeholder="اسم العامل" data-testid="input-employee-name" /></label>
-      <div className="form-two"><label>رقم الجوال <small>اختياري</small><input maxLength={40} value={phone} onChange={e => setPhone(e.target.value)} placeholder="05xxxxxxxx" data-testid="input-employee-phone" /></label><label>المسمى الوظيفي <small>اختياري</small><input maxLength={100} value={position} onChange={e => setPosition(e.target.value)} placeholder="مثل: كاشير" data-testid="input-employee-position" /></label></div>
-      <div className="form-two"><label>بداية الوردية<input type="time" value={shiftStartTime} onChange={e => setShiftStartTime(e.target.value)} data-testid="input-shift-start" /></label><label>فترة السماح بالدقائق<input type="number" min={0} max={120} value={gracePeriodMinutes} onChange={e => setGracePeriodMinutes(Number(e.target.value))} data-testid="input-grace-minutes" /></label></div>
-      {error && <p className="form-error" data-testid="status-employee-form-error">{error}</p>}
-      <div className="dialog-actions"><Button type="button" onClick={close} className="button-secondary" data-testid="button-cancel-employee">إلغاء</Button><Button disabled={busy} className="button-primary" data-testid="button-save-employee">{busy ? 'جارٍ الحفظ…' : employee ? 'حفظ التعديلات' : 'إضافة العامل'}</Button></div>
-    </form>
-  </Modal>;
-}
-
 function ConfirmDialog({ employee, busy, error, close, confirm }: { employee: Employee; busy: boolean; error: string; close: () => void; confirm: () => void }) {
   return <Modal title="تعطيل العامل؟" close={close} testId="dialog-confirm-deactivate">
     <p className="confirm-copy">سيتم تعطيل <b>{employee.fullName}</b> مع الاحتفاظ بسجلات حضوره السابقة.</p>
     {error && <p className="form-error" data-testid="status-deactivate-error">{error}</p>}
     <div className="dialog-actions"><Button onClick={close} className="button-secondary" data-testid="button-cancel-deactivate">إبقاء العامل</Button><Button onClick={confirm} disabled={busy} className="button-danger" data-testid="button-confirm-deactivate">{busy ? 'جارٍ التعطيل…' : 'تعطيل العامل'}</Button></div>
   </Modal>;
-}
-
-function Modal({ title, close, children, testId }: { title: string; close: () => void; children: ReactNode; testId: string }) {
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
-    window.addEventListener('keydown', listener);
-    return () => window.removeEventListener('keydown', listener);
-  }, [close]);
-  return <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) close(); }} data-testid={testId}>
-    <section className="dialog-card" role="dialog" aria-modal="true" aria-label={title}>
-      <header className="dialog-heading"><div><span className="section-kicker">دوامي / فريق العمل</span><h2>{title}</h2></div><button onClick={close} aria-label="إغلاق" data-testid="button-close-dialog"><X size={19} /></button></header>
-      {children}
-    </section>
-  </div>;
 }
 
 type NdefRecordLike = { recordType: string; data: string | ArrayBuffer | DataView | null };

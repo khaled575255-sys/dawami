@@ -258,3 +258,8 @@
   .report-switch .button { flex: 1; }
   .daily-summary-grid { grid-template-columns: 1fr 1fr; }
 }
+
+.dialog-actions .button-primary { color: #fffdf8; background-color: #294b40; }
+.dialog-actions .button-primary:hover:not(:disabled) { background-color: #203d34; }
+.dialog-actions .button-secondary { color: #263b34; background-color: #fffdf8; border-color: #ded8cb; }
+.dialog-actions .button:focus-visible { outline: 3px solid #c99d4d; outline-offset: 2px; }
